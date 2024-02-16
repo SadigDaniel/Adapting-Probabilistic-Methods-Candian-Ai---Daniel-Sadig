@@ -1,0 +1,323 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsmath}
+\usepackage{soul}
+\usepackage{xcolor}
+
+\title{Adapting Probabilistic Methods For Ensemble Networks}
+\author{Daniel Sadig}
+\date{February 2024}
+
+\sethlcolor{yellow}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+\textcolor{blue}{
+\begin{itemize}
+    \item Designed a probabilistic Monte Carlo Simulation method to evaluate the certified robustness of non-empirically trained ensemble models.
+    \item Used the method to measure the certified robustness of ensemble methods that are resistant to adversarial examples. Specifically, we defend against adversarial examples non-empirically, i.e., the ensemble model is not adversarially trained.
+    \item Analyzed the impact of state-of-the-art ensemble models on certified robustness \cite{reference1}.
+    \item This is the first paper to analyze the impact of certified robustness on models that are not trained with adversarial examples.
+    \item Using the AutoAttack method to compare the adversarial robustness of empirically and non-empirically trained models, \cite{reference5}.
+\end{itemize}
+}
+\section{Related Work}
+\textcolor{blue}{
+\begin{itemize}
+    \item “Certified robustness via randomized smoothing,” \cite{reference4}, provided a probabilistic approach to certify the robustness of single models. 
+    \item I will adapt this probabilistic method to work for ensembles that are non-empirically trained. 
+    \item “On the certified robustness for ensemble models and beyond.” \cite{reference6}.
+    \begin{itemize}
+        \item They use the \textit{weighted ensemble} and \textit{max-margin ensemble} protocol to create an ensemble consisting of three networks. These models are adversarially trained using Gaussian isotropic noise. They observed that an ensemble is only slightly more robust than a single network.
+    \end{itemize}
+    \begin{itemize}
+        \item To overcome this issue, they applied a “Diversity-Regularized-Training” \cite{reference6} technique. This is a lightweight regularization approach that is applied during training time.
+        \item They found that this lightweight training approach increased the accuracy of a model. 
+    \end{itemize}
+    \item All previous work on \textit{"the certified robustness of ensemble models"} only looks at models that are trained using adversarial training techniques (i.e., empirically trained networks).
+    \item This is the first work that examined the adversarial and certified robustness of ensemble models that are not trained using adversarial examples.
+\end{itemize}
+}
+\section{Non-Empirically Trained Ensemble Model}
+\textcolor{blue}{
+This section looks at the fundamental aspects of the ensemble model and how it deals with different noise perturbations \cite{reference1}. This approach builds upon defensive distillation \cite{reference7} by adding noise at inference time, thus obscuring the logits and defending against the Carlini-Wagner attack. There are three fundamental components to the ensemble network:
+}
+\textcolor{blue}{
+\begin{enumerate}
+    \item \textbf{Noisy logits:} The process of injecting noise at inference time, such that the genuine logits cannot be retrieved.
+    \item \textbf{Ensemble voting:} An unavoidable consequence of adding noise is the deterioration of network accuracy. To counteract this, the authors applied an ensemble of networks with varying noise values. This increased the accuracy of the DNN and made it harder to craft an effective adversarial example.
+    \item \textbf{Rank verification:} Used to aggregate the ensemble results and determine a winning class.
+\end{enumerate}
+}
+
+\subsection{Noisy Logits}
+\textcolor{blue}{
+Defensive distillation only hides the soft-max probabilities; this allowed Carlini and Wagner to access the soft logits. Since no noise was added at inference time, these logits are clean and can be used to generate adversarial attacks with minimal perturbations. To circumvent this issue, the current literature \cite{reference1} adds noise at inference time. Obscuring the logits and ensuring that the output of each logit is noisy; therefore, attackers can not recover the logits.
+To obfuscate the logits, random Gaussian noise \epsilon $ \sim $ \(N(x, \sigma^2, I)\) is added to at query time. This addition of Gaussian noise ensures that the original logits can not be recovered, and the final output is also noisy. Although this technique defends against the Carlini and Wagner attack, it decreases network accuracy. The authors employ an ensemble of networks to correct for this decrease in accuracy.
+}
+\subsection{Ensemble Voting}
+\textcolor{blue}{
+The model's authors outlined two key aspects of using an ensemble: (1) Using an ensemble improves the accuracy over a single network. (2) It provides increased resilience when some of the networks are under attack.}
+
+\textcolor{blue}{
+The authors adopted a Private Aggregation of Teacher Ensembles (PATE) voting mechanism to decide the ensemble's final result, \cite{reference12}. By partitioning the training dataset, which contains sensitive data, into disjoint sets, PATE is able to protect data privacy. The \textit{teacher }network is then trained on these disjoint sets. To ensure data privacy, we train a \textit{student }network using the soft labels generated by the \textit{teacher }network. This prevents the student network from accessing the underlying data or parameters of the teacher network. This is a differential privacy technique that ensures the data privacy of DNNs.}
+
+\textcolor{blue}{
+Instead of requiring a unanimous vote, the model will employ a majority rules type of voting. They are only looking for the largest subset of networks to agree on the output. This is much more feasible than requiring each network to classify the image successfully. It is important to remember that as the number of partitions increases, the success probability by voting also increases.}
+
+\subsection{Rank Verification}
+\textcolor{blue}{
+An unfortunate drawback of using a voting mechanism is noisy outputs; this may result in two classes having nearly identical probabilities. This indicates that the inputs may have been perturbed or the model is compromised, thus resulting in misclassification. To avoid this, the authors employed a rank verification step, indicating that if the probability of the two most likely classes is nearly identical, the model should abstain from casting a vote.}
+
+\textcolor{blue}{
+Rank verification claims that the top two classes are equally likely to be the correct verification. If we assume \(n_A\) is the vote count for class \(y_A\) and \(n_B\) is the vote count for class \(y_B\) for a given input \(x\), where \(y_A\) has a greater vote count than \(y_B\), \(n_A \geq n_B\), then we set the probability for \(n_A\), \(p = \text{BinomTest}(n_A, n_A + n_B, 0.5)\). If \(p < \alpha\text{RV}\), we reject the hypothesis that \(y_A\) and \(y_B\) are both equally likely. If we cannot reject our claim, we abstain from classifying \(y_A\) as the most probable class.}
+
+\section{Robustness Guarantee}
+\textcolor{blue}{
+The robustness of a model is determined by the amount of perturbation it can withstand without misclassifying the image. This section shows how we will adapt the Monte Carlo Sampling technique for non-smoothed models to certify robustness under L2 norm. Previous approaches have analyzed the certified robustness of smoothed ensembles consisting of only three networks \cite{reference1}. To certify the robustness of larger, non-smoothed ensembles, we let \( F^* \) be the output result of the classifier, \( \{ F^l: l = 1, \ldots, m \} \), where \( m \) is the total number of networks in our ensemble.}
+
+\begin{equation}
+F^*(x) = \arg\max_{c \in Y}\sum_{l=1}^{m} (F^l(x) = y) \quad 
+\end{equation}
+
+\[
+\varepsilon \ \sim \ \mathcal{N}(0, \sigma^2 I)
+\]
+
+\begin{equation}
+g(x) = F^*(x + \varepsilon) \quad 
+\end{equation}
+
+\textcolor{blue}{
+Given an input with some isotropic Gaussian noise, our base classifier, shown in equation (2), will return \( Y_A \) with probability \( P_A \), which is our most probable class. It will also return \( Y_B \) with probability \( P_B \), representing the probability for the second most likely class. By interpreting these results, we conclude that our smoothed classifier \( g \) is robust around \( x \) within the given \( L_2 \) radius (5).}
+
+\vspace{\baselineskip}
+
+\textbf{Theorem 1.0:} Let \( F^*: \mathbb{R}^d \rightarrow Y \) be a deterministic or random function, let \( g \) be defined as (3). Given \( c_A \in Y \), \(\underline{P_A} \), \(\overline{P_B} \in [0,1] \), the following conditions are satisfied:
+
+\[
+P(F^*(x + \varepsilon) = Y_A) \geq p_A \geq p_B \geq \max_{c \neq Y_A} P(f(F^*(x + \varepsilon)) = c)
+\]
+Then 
+\begin{equation}
+g(x + \delta) = y_A \quad \text{for all }~\lVert \delta \rVert_2 < R,
+\end{equation}
+where
+\begin{equation}
+R = \sigma^2 (\Phi^{-1}(p_A) - \Phi^{-1}(p_B))
+\end{equation}
+
+From the theorem above, we can see that the certified radius \( R \) is large when: (1) the probability of the top class is high and (2) the noise level is high. \vspace{12pt}
+
+\section{Results}
+\textcolor{blue}{
+\begin{itemize}
+    \item In this section, we will compare the certified robustness of a single model, an ensemble of 3 networks, and an ensemble of 20 networks.
+    \item We will make this comparison for both the CIFAR-10 and MNIST data sets.
+    \item Also, I will compare the adversarial robustness of the state-of-the-art ensemble model with the single and ensemble models trained using adversarial examples. 
+    \item The goal is to show that having an ensemble can increase the overall accuracy and the network's radius. 
+    \item Also, it shows that training using non-empirical methods, defensive distillation, noisy logits, and rank verification are more adversarially robust than adversarial training. To evaluate this, we will run the AutoAttack approach \cite{reference5}.
+\end{itemize}
+}
+\subsection{Experimental setup for certified robustness }
+\textcolor{blue}{
+\begin{itemize}
+    \item \textbf{Baseline}: For our baseline model, we will use a single network using defensive distillation and noisy logits. 
+    \begin{itemize}
+        \item CIFAR-10
+        \begin{itemize}
+            \item The \textit{teacher model} has a temperature of 3 and an intrinsic noise of 0.03.
+        \end{itemize}
+        \item MNIST
+        \begin{itemize}
+            \item The \textit{teacher model} has a temperature of 3 and an intrinsic noise of 0.5.
+        \end{itemize}
+    \end{itemize}
+    \item \textbf{Ensemble of 3 Networks}: This ensemble will consist of 3 models trained using a state-of-the-art approach \cite{reference1}
+    \begin{itemize}
+        \item CIFAR-10
+        \begin{itemize}
+            \item Teacher models will have a temperature of 1-3, and an intrinsic noise of 0.03.
+        \end{itemize}
+        \item MNIST
+        \begin{itemize}
+            \item Teacher models will have a temperature value of 1-3, and an intrinsic noise of 0.5 per model.
+        \end{itemize}
+    \item \textbf{Ensemble of 20 Networks}: Similar to the ensemble of 3 networks, these 20 networks are trained using the state-of-the-art method. 
+    \end{itemize}
+\end{itemize}
+}
+\subsection{Certified Accuracy Results}
+
+\begin{table}[htb]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|c|c|} \hline 
+        
+        \textbf{Radius: } & \textbf{R: 0.0} & \textbf{R 0.1} & \textbf{R: 0.2} & \textbf{R 0.3} & \textbf{R 0.4} & \textbf{R 0.5} \\ \hline 
+        
+        \textbf{Noise: 0.05} & \hl{0.79*} & 0.3 & 0.16 & 0.0 & 0.0 & 0.0 \\ \hline 
+        
+        \textbf{Noise: 0.1} & 0.6* & 0.41* & 0.25 & 0.14 & 0.06* & 0.0 \\ \hline
+
+        \textbf{Noise: 0.15} & 0.44 & 0.32 & 0.27* & 0.20* & 0.10* & \hl{0.05*} \\ \hline
+        
+    \end{tabular}
+    \caption{Cifar-10 Ensemble of 20 Networks}
+    \label{tab:example}
+\end{table}
+
+
+\begin{table}[htb]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|c|c|} \hline 
+        
+        \textbf{Radius: } & \textbf{R: 0.0} & \textbf{R: 0.1} & \textbf{R: 0.2} & \textbf{R 0.3} & \textbf{R 0.4} & \textbf{R 0.5} \\ \hline 
+        
+        \textbf{Noise: 0.05} & \hl{0.79*} & 0.44* & 0.0 & 0.0 & 0.0 & 0.0 \\ \hline 
+        
+        \textbf{Noise: 0.1} & 0.59* & 0.38 & 0.30* & \hl{0.22*} & 0.0 & 0.0 \\ \hline
+
+        \textbf{Noise: 0.15} & 0.41 & 0.36 & 0.26* & \hl{0.22*} & \hl{0.19*} & \hl{0.05*} \\ \hline
+        
+    \end{tabular}
+    \caption{Cifar-10 Ensemble of 3 Networks}
+    \label{tab:example}
+\end{table}
+
+
+\begin{table}[htb]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|c|c|} \hline 
+        
+        \textbf{Radius: } & \textbf{R: 0.0} & \textbf{R: 0.1} & \textbf{R: 0.2} & \textbf{R 0.3} & \textbf{R 0.4} & \textbf{R 0.5} \\ \hline 
+        
+        \textbf{Noise: 0.05} & 0.72* & \hl{0.53*} & 0.0 & 0.0 & 0.0 & 0.0 \\ \hline 
+        
+        \textbf{Noise: 0.1} & 0.67* & 0.44 & 0.37* & 0.20* & 0.0 & 0.0 \\ \hline
+
+        \textbf{Noise: 0.15} & 0.67 & 0.44 & \hl{0.38*} & 0.20* & 0.0* & 0.0 \\ \hline
+        
+    \end{tabular}
+    \caption{Cifar-10 Single Network}
+    \label{tab:example}
+\end{table}
+\newpage
+\textbf{Observation:}
+\textcolor{blue}{
+\begin{itemize}
+    \item We see that by using an ensemble of 3 or more networks increases the radius by 66 percent.
+    \item Similarly, we see that using an ensemble of 3 networks increases the overall accuracy. 
+    \item Lastly, we see that when we increase the ensemble network from 3 to 20. The radius increases for lower noise perturbations. For instance, if we look at Column 2 in Table 1 and Table 2, we see that the radius for Table 1 is greater than that of Table 2.
+    \item Also, in the following sections, we will see that increasing the ensemble also increases the adversarial robustness.    
+\end{itemize}
+}
+
+\begin{table}[htb]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|c|c|c|} \hline 
+        
+        \textbf{Radius: } & \textbf{R: 0.0} & \textbf{R 0.25} & \textbf{R: 0.5} & \textbf{R 0.75} & \textbf{R 1.0} & \textbf{R 1.25} & \textbf{R 1.5}  \\ \hline 
+        
+        \textbf{Noise: 0.25} & \hl{0.98*} & \hl{0.9*} & 0.75 & 0.59 & 0.28 & 0.0 & 0.0 \\ \hline 
+        
+        \textbf{Noise: 0.5} & 0.95 & 0.89 & 0.78* & 0.60* & \hl{0.4*} & \hl{0.19*} & 0.01* \\ \hline
+
+        \textbf{Noise: 1.0} & 0.64 & 0.53 & 0.44 & 0.30 & 0.12 & 0.05 & 0.01* \\ \hline
+
+        \textbf{Noise: 1.25} & 0.48 & 0.42 & 0.25 & 0.14 & 0.06 & 0.01 & 0.0 \\ \hline
+        
+    \end{tabular}
+    \caption{MNIST Ensemble of 20 Networks}
+    \label{tab:example}
+\end{table}
+
+\begin{table}[htb]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|c|c|c|} \hline 
+        
+        \textbf{Radius: } & \textbf{R: 0.0} & \textbf{R 0.25} & \textbf{R: 0.5} & \textbf{R 0.75} & \textbf{R 1.0} & \textbf{R 1.25} & \textbf{R 1.5}  \\ \hline 
+        
+        \textbf{Noise: 0.25} & \hl{0.98*} & \hl{0.9*} & \hl{0.9} & \hl{0.73*} & 0.0 & 0.0 & 0.0 \\ \hline 
+        
+        \textbf{Noise: 0.5} & 0.96 & 0.9* & 0.8* & 0.59 & 0.39 & 0.17 & \hl{0.03*} \\ \hline
+
+        \textbf{Noise: 1.0} & 0.58 & 0.47 & 0.33 & 0.22 & 0.06 & 0.02 & 0.0 \\ \hline
+
+        \textbf{Noise: 1.25} & 0.38 & 0.31 & 0.16 & 0.05 & 0.02 & 0.0 & 0.0 \\ \hline
+        
+    \end{tabular}
+    \caption{MNIST Ensemble of 3 Networks}
+    \label{tab:example}
+\end{table}
+
+\begin{table}[htb]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|c|c|c|} \hline 
+        
+        \textbf{Radius: } & \textbf{R: 0.0} & \textbf{R 0.25} & \textbf{R: 0.5} & \textbf{R 0.75} & \textbf{R 1.0} & \textbf{R 1.25} & \textbf{R 1.5}  \\ \hline 
+        
+        \textbf{Noise: 0.25} & 0.95 & \hl{0.9*} & 0.79* & 0.58* & 0.0 & 0.0 & 0.0 \\ \hline 
+        
+        \textbf{Noise: 0.5} & 0.91 & 0.78 & 0.62 & 0.47 & 0.3* & 0.16* & 0.02* \\ \hline
+
+        \textbf{Noise: 1.0} & 0.54 & 0.42 & 0.27 & 0.2 & 0.07 & 0.02 & 0.0 \\ \hline
+
+        \textbf{Noise: 1.25} & 0.38 & 0.27 & 0.20 & 0.09 & 0.04 & 0.01 & 0.0 \\ \hline
+        
+    \end{tabular}
+    \caption{MNIST Single network}
+    \label{tab:example}
+\end{table}
+
+\newpage
+\textbf{Observation:}
+\textcolor{blue}{
+\begin{itemize}
+    \item Unlike CIFAR-10, MNIST uses a greyscale coloring, meaning it only contains black and white images, thus making it easier for a model to classify the images. That is why it can handle larger noise perturbations than CIFAR-10 or ImageNet datasets.
+    \item Despite the differences between the datasets, we can see a similar trend. For instance, the ensemble containing 20 networks has the best overall accuracy.
+    \item As we increase the number of ensembles in our network, the radius increases. If we examine column 1 from \textit{table 4, table 5} and \textit{table 6} we can see that the ensemble with 20 networks has a 20 percent wider radius. 
+    \item Similarly, this trend continues in columns 3 and 4 of the aforementioned tables.
+\end{itemize}
+}
+\subsection{Adversarial Accuracy Setup}
+\textcolor{blue}{
+\begin{itemize}
+    \item To test the adversarial accuracy of the state-of-the-art technique, we will run AutoAttack on the CIFAR-10 dataset. 
+    \item This attack will be run on the 3 separate models:
+    \begin{itemize}
+            \item \textbf{Cohen et al.,} \cite{reference4}, model. This model consists of a single network trained using adversarial training. The input images will be perturbed with an isotropic Gaussian noise of 0.25. This model will serve as our \textbf{baseline} model.
+            \item \textbf{Yang et al.,} \cite{reference6}, this model will consist of 3 single models separately trained and conglomerated together to form an ensemble of 3 networks. It uses a majority vote to decide which class is the most probable outcome. Similar to the previous approach, the individual models are trained using adversarial training.
+            \item \textbf{Liang et al.,} the model will be trained using non-empirical methods. Unlike the previous model, this ensemble uses a \textit{rank verification} approach to decide the most probable class.
+        \end{itemize}
+        \item The objective of this section is to show that using the state-of-the-art approach has better adversarial robustness than previous approaches. 
+\end{itemize}
+}
+\begin{table}[htb]
+    \centering
+    \begin{tabular}{|c|c|c|c|} \hline 
+        
+        \textbf{ } & \textbf{Cohen et al.,} & \textbf{Yang et al.,} & \textbf{Liang et al.,} \\ \hline 
+        
+        \textbf{CIFAR-10} & \textit{Add Later} &\textit{Add Later}  &\textit{Add Later} \\ \hline 
+        
+        \textbf{MNIST} & \textit{Add Later} &\textit{Add Later}  &\textit{Add Later} \\ \hline
+
+        
+    \end{tabular}
+    \caption{Adversarial Robustness}
+    \label{tab:example}
+\end{table}
+\textcolor{blue}{
+\begin{itemize}
+    \item Ideally, this will show that the state-of-the-art approach has better adversarial accuracy than the other approaches.
+\end{itemize}
+}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
