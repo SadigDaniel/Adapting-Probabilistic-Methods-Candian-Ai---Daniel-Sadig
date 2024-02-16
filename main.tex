@@ -5,7 +5,12 @@
 \usepackage{soul}
 \usepackage{xcolor}
 
-\title{Adapting Probabilistic Methods For Ensemble Networks}
+\newcommand{\rs}[1]{\noindent{\color{red}\textbf{RS:} #1}}
+\newcommand{\ds}[1]{{\color{blue} #1}}
+\newcommand{\draft}[1]{{\color{teal} #1}}
+
+
+\title{Adversarial Robustness Guarantee for Ensemble Networks}
 \author{Daniel Sadig}
 \date{February 2024}
 
@@ -14,6 +19,9 @@
 \begin{document}
 
 \maketitle
+\rs {please speak to Hirad or Hamed about the organizations of LateX files}
+
+\rs {make sure you're using CAN AI template}
 
 \section{Introduction}
 \textcolor{blue}{
@@ -42,7 +50,9 @@
     \item This is the first work that examined the adversarial and certified robustness of ensemble models that are not trained using adversarial examples.
 \end{itemize}
 }
-\section{Non-Empirically Trained Ensemble Model}
+%\section{Non-Empirically Trained Ensemble Model}
+\section{Robustness Guarantee for Ensemble Networks}
+
 \textcolor{blue}{
 This section looks at the fundamental aspects of the ensemble model and how it deals with different noise perturbations \cite{reference1}. This approach builds upon defensive distillation \cite{reference7} by adding noise at inference time, thus obscuring the logits and defending against the Carlini-Wagner attack. There are three fundamental components to the ensemble network:
 }
@@ -57,7 +67,7 @@ This section looks at the fundamental aspects of the ensemble model and how it d
 \subsection{Noisy Logits}
 \textcolor{blue}{
 Defensive distillation only hides the soft-max probabilities; this allowed Carlini and Wagner to access the soft logits. Since no noise was added at inference time, these logits are clean and can be used to generate adversarial attacks with minimal perturbations. To circumvent this issue, the current literature \cite{reference1} adds noise at inference time. Obscuring the logits and ensuring that the output of each logit is noisy; therefore, attackers can not recover the logits.
-To obfuscate the logits, random Gaussian noise \epsilon $ \sim $ \(N(x, \sigma^2, I)\) is added to at query time. This addition of Gaussian noise ensures that the original logits can not be recovered, and the final output is also noisy. Although this technique defends against the Carlini and Wagner attack, it decreases network accuracy. The authors employ an ensemble of networks to correct for this decrease in accuracy.
+To obfuscate the logits, random Gaussian noise \epsilon $ \sim $ \(N(x, \sigma^2, I)\) is added to at query time. This addition of Gaussian noise ensures that the original logits can not be recovered, and the final output is also noisy. Although this technique defends against the Carlini and Wagner attack, it decreases network accuracy. The authors employ an ensemble of networks to compensate for this decrease in accuracy.
 }
 \subsection{Ensemble Voting}
 \textcolor{blue}{
@@ -96,6 +106,7 @@ g(x) = F^*(x + \varepsilon) \quad
 Given an input with some isotropic Gaussian noise, our base classifier, shown in equation (2), will return \( Y_A \) with probability \( P_A \), which is our most probable class. It will also return \( Y_B \) with probability \( P_B \), representing the probability for the second most likely class. By interpreting these results, we conclude that our smoothed classifier \( g \) is robust around \( x \) within the given \( L_2 \) radius (5).}
 
 \vspace{\baselineskip}
+\rs{a theorem needs proof}
 
 \textbf{Theorem 1.0:} Let \( F^*: \mathbb{R}^d \rightarrow Y \) be a deterministic or random function, let \( g \) be defined as (3). Given \( c_A \in Y \), \(\underline{P_A} \), \(\overline{P_B} \in [0,1] \), the following conditions are satisfied:
 
@@ -114,6 +125,8 @@ R = \sigma^2 (\Phi^{-1}(p_A) - \Phi^{-1}(p_B))
 From the theorem above, we can see that the certified radius \( R \) is large when: (1) the probability of the top class is high and (2) the noise level is high. \vspace{12pt}
 
 \section{Results}
+\rs {first start completing this section as much as you can - speak to Hirad about what should be the main components of this section}
+
 \textcolor{blue}{
 \begin{itemize}
     \item In this section, we will compare the certified robustness of a single model, an ensemble of 3 networks, and an ensemble of 20 networks.
